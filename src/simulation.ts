@@ -16,7 +16,7 @@ export class Simulation {
         visualWarp: 1,
         simulationSpeed: 1,
         lightSpeed: 235,
-        lightBendingFactor: 18,
+        lightBendingFactor: 28,
         trailLength: 1200,
         collisionRadius: 18,
         maxAcceleration: 420

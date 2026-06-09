@@ -1,6 +1,6 @@
-import type { BodyType, Vector2 } from "./types";
 import { Renderer } from "./renderer";
 import { Simulation } from "./simulation";
+import type { BodyType, Vector2 } from "./types";
 
 function requireElement<T extends HTMLElement>(id: string, type: new () => T): T {
   const element = document.getElementById(id);
