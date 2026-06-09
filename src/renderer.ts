@@ -244,15 +244,15 @@ export class Renderer {
   private drawCentralMass(state: SimulationState): void {
     const mass = state.params.centralMass;
     const center = this.worldToScreen({ x: 0, y: 0 }, state);
-    const radius = (20 + Math.sqrt(Math.max(mass, 1)) * 2.6) * this.scale;
+    const radius = (12 + Math.sqrt(Math.max(mass, 1)) * 1.45) * this.scale;
 
-    const glow = this.ctx.createRadialGradient(center.x, center.y, radius * 0.2, center.x, center.y, radius * 2.8);
-    glow.addColorStop(0, "rgba(255, 200, 110, 0.62)");
-    glow.addColorStop(0.48, "rgba(237, 105, 75, 0.20)");
+    const glow = this.ctx.createRadialGradient(center.x, center.y, radius * 0.35, center.x, center.y, radius * 2.25);
+    glow.addColorStop(0, "rgba(255, 200, 110, 0.42)");
+    glow.addColorStop(0.48, "rgba(237, 105, 75, 0.15)");
     glow.addColorStop(1, "rgba(237, 105, 75, 0)");
     this.ctx.fillStyle = glow;
     this.ctx.beginPath();
-    this.ctx.arc(center.x, center.y, radius * 2.8, 0, Math.PI * 2);
+    this.ctx.arc(center.x, center.y, radius * 2.25, 0, Math.PI * 2);
     this.ctx.fill();
 
     const body = this.ctx.createRadialGradient(
