@@ -1,4 +1,4 @@
-import { accelerationForMass, normalize, scale } from "./physics";
+import { normalize } from "./physics";
 import type { SimObject, SimulationState, Vector2 } from "./types";
 
 type ScreenPoint = {
@@ -216,18 +216,6 @@ export class Renderer {
     );
     this.drawArrow(start, velocityEnd, object.type === "light" ? "#ffe27a" : "#7adfff", 2);
 
-    if (object.type === "mass") {
-      const acceleration = accelerationForMass(object.position, state.params);
-      const accelerationVector = scale(acceleration, 8);
-      const accelerationEnd = this.worldToScreen(
-        {
-          x: object.position.x + accelerationVector.x,
-          y: object.position.y + accelerationVector.y
-        },
-        state
-      );
-      this.drawArrow(start, accelerationEnd, "#f59f7d", 1.5);
-    }
   }
 
   private drawDragPreview(state: SimulationState): void {
