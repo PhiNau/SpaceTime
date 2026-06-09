@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Raumkrümmung durch Masse</title>
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <aside class="control-panel" aria-label="Steuerung">
+        <header class="panel-header">
+          <p class="eyebrow">Physik EF</p>
+          <h1>Raumkrümmung</h1>
+          <p>
+            Didaktisches Modell: Eine Masse krümmt die dargestellte Umgebung.
+            Testkörper und Lichtstrahlen werden qualitativ beeinflusst.
+          </p>
+        </header>
+
+        <section class="control-group" aria-label="Parameter">
+          <label class="slider-row" for="centralMass">
+            <span>Zentralmasse</span>
+            <output id="centralMassValue">44</output>
+          </label>
+          <input id="centralMass" type="range" min="0" max="100" value="44" step="1" />
+
+          <label class="slider-row" for="warpStrength">
+            <span>Krümmung sichtbar verstärken</span>
+            <output id="warpStrengthValue">1.0x</output>
+          </label>
+          <input id="warpStrength" type="range" min="0.2" max="2.6" value="1" step="0.1" />
+
+          <label class="slider-row" for="simulationSpeed">
+            <span>Simulationsgeschwindigkeit</span>
+            <output id="simulationSpeedValue">1.0x</output>
+          </label>
+          <input id="simulationSpeed" type="range" min="0.1" max="2.5" value="1" step="0.1" />
+
+          <label class="slider-row" for="lightBending">
+            <span>Lichtablenkung verstärken</span>
+            <output id="lightBendingValue">18</output>
+          </label>
+          <input id="lightBending" type="range" min="0" max="44" value="18" step="1" />
+        </section>
+
+        <section class="control-group" aria-label="Objekte">
+          <p class="group-label">Objekttyp</p>
+          <div class="segmented" role="group" aria-label="Objekttyp auswählen">
+            <button id="selectMass" class="segment active" type="button">● Testmasse</button>
+            <button id="selectLight" class="segment" type="button">◆ Lichtstrahl</button>
+          </div>
+
+          <label class="check-row">
+            <input id="showVectors" type="checkbox" checked />
+            <span>Vektoren anzeigen</span>
+          </label>
+        </section>
+
+        <section class="control-group" aria-label="Simulation">
+          <div class="button-grid">
+            <button id="startButton" class="primary" type="button">▶ Start</button>
+            <button id="pauseButton" type="button">⏸ Pause</button>
+            <button id="resetButton" type="button">↺ Reset</button>
+            <button id="clearTrailsButton" type="button">⌫ Spuren löschen</button>
+          </div>
+        </section>
+
+        <details class="teaching-box" open>
+          <summary>Leitfragen</summary>
+          <ol>
+            <li>Was passiert mit dem Gitter bei größerer Zentralmasse?</li>
+            <li>Wann entsteht ein Vorbeiflug, wann eine Umlaufbahn?</li>
+            <li>Wie wird ein naher Lichtstrahl abgelenkt?</li>
+            <li>Warum ist die Gitter-Eindellung nur ein Modellbild?</li>
+          </ol>
+        </details>
+      </aside>
+
+      <main class="simulation-area">
+        <div class="canvas-wrap">
+          <canvas id="simulationCanvas" aria-label="Simulation zur Raumkrümmung"></canvas>
+        </div>
+        <p class="model-note">
+          Diese Simulation ist ein vereinfachtes, didaktisch überhöhtes Modell.
+          Sie ist keine exakte Rechnung der Allgemeinen Relativitätstheorie:
+          Die Gitter-Eindellung ist eine zweidimensionale Analogie, Testmassen
+          werden Newton-ähnlich berechnet und Lichtablenkung wird qualitativ
+          verstärkt.
+        </p>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

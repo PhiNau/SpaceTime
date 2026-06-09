@@ -1,0 +1,697 @@
+# Projekt: Interaktive Web-Simulation zur Raumkrümmung durch Masse
+
+## Ziel des Projekts
+
+Erstelle eine browserbasierte, interaktive Simulation für den Physikunterricht in der EF am Gymnasium.
+
+Die Simulation soll anschaulich zeigen, dass eine große Masse die Umgebung geometrisch „krümmt“ und dass sich dadurch die Bahnen anderer Körper sowie Lichtstrahlen verändern. Die Darstellung ist ausdrücklich **didaktisch modellhaft** und keine exakte numerische Simulation der Allgemeinen Relativitätstheorie.
+
+Die Simulation soll besonders geeignet sein, um den Übergang von der klassischen Gravitation nach Newton zur Idee der Raumzeitkrümmung nach Einstein zu veranschaulichen.
+
+---
+
+## Zentrale didaktische Idee
+
+Eine große feste Masse befindet sich im Zentrum der Simulation. Um diese Masse herum wird ein Gitter dargestellt, das die Krümmung des Raumes symbolisiert. Je größer die Zentralmasse eingestellt wird, desto stärker soll das Gitter verformt erscheinen.
+
+Nutzerinnen und Nutzer können anschließend weitere Objekte hinzufügen:
+
+1. **Testmasse**
+   Ein kleiner Körper mit einstellbarer Anfangsposition und Anfangsgeschwindigkeit bewegt sich durch das gekrümmte Gebiet. Seine Bahn wird visualisiert.
+
+2. **Lichtstrahl**
+   Ein Lichtstrahl bewegt sich mit konstanter Geschwindigkeit durch das gekrümmte Gebiet. Seine Richtung wird durch die Krümmung beeinflusst. Dadurch soll qualitativ der Effekt der Lichtablenkung bzw. Gravitationslinsenwirkung sichtbar werden.
+
+Die Simulation soll nicht den Eindruck erwecken, physikalisch exakt zu sein. Stattdessen soll sie ein klares, interaktives Modell für den Unterricht liefern.
+
+---
+
+## Technische Anforderungen
+
+### Grundlegender Tech-Stack
+
+Nutze bevorzugt:
+
+* HTML
+* CSS
+* TypeScript
+* Vite
+* Canvas 2D
+
+Alternativ darf JavaScript statt TypeScript verwendet werden, wenn dadurch die Umsetzung deutlich einfacher wird. TypeScript ist aber bevorzugt.
+
+Keine serverseitige Anwendung. Die Simulation soll vollständig lokal im Browser laufen.
+
+Keine schweren externen Physik- oder Grafikbibliotheken verwenden. Kleine Hilfsbibliotheken sind nur erlaubt, wenn sie wirklich sinnvoll sind. Die Simulation soll möglichst transparent, leicht verständlich und wartbar bleiben.
+
+---
+
+## Erwartete Projektstruktur
+
+Eine mögliche Projektstruktur:
+
+```text
+space-curvature-simulation/
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+├── src/
+│   ├── main.ts
+│   ├── simulation.ts
+│   ├── physics.ts
+│   ├── renderer.ts
+│   ├── controls.ts
+│   ├── types.ts
+│   └── styles.css
+└── README.md
+```
+
+Wenn eine einfachere Struktur sinnvoller ist, darf sie angepasst werden. Der Code soll aber sauber gegliedert sein.
+
+---
+
+## Darstellung der Simulation
+
+### Canvas
+
+Die Simulation soll auf einem großen Canvas dargestellt werden.
+
+Der Canvas soll responsiv sein und sich an die Fenstergröße anpassen.
+
+### Zentrale Masse
+
+In der Mitte befindet sich eine feste Zentralmasse.
+
+Darstellung:
+
+* Kreis oder Kugel in der Mitte
+* Größe visuell abhängig von der eingestellten Masse
+* deutliche Markierung als „Zentralmasse“
+* optional Beschriftung mit aktuellem Massenwert
+
+Die Zentralmasse bleibt fest an ihrer Position.
+
+### Gitter als Raumkrümmungsmodell
+
+Um die zentrale Masse herum soll ein Gitternetz dargestellt werden.
+
+Das Gitter soll abhängig von der Zentralmasse verformt werden.
+
+Die Darstellung darf als 2,5D-Modell erfolgen:
+
+* Das Gitter liegt eigentlich in einer Ebene.
+* In der Nähe der Masse wird es optisch nach unten gezogen.
+* Die Verformung wird perspektivisch oder pseudo-perspektivisch auf dem Canvas dargestellt.
+
+Die Gitterverformung soll ungefähr durch eine Potentialfunktion beschrieben werden, zum Beispiel:
+
+```text
+z(r) = -warpStrength * M / sqrt(r² + softening²)
+```
+
+Dabei ist:
+
+* `r` der Abstand zur Zentralmasse
+* `M` die Zentralmasse
+* `softening` ein kleiner Glättungswert, damit die Darstellung im Zentrum nicht unendlich wird
+* `warpStrength` ein didaktischer Verstärkungsfaktor
+
+Wichtig:
+
+Die Gitterverformung soll deutlich sichtbar sein, darf aber nicht so extrem werden, dass die Simulation unlesbar wird.
+
+### Trajektorien
+
+Die Bahn von Testmassen und Lichtstrahlen soll als Spur dargestellt werden.
+
+Die Spur soll dauerhaft sichtbar bleiben, bis sie gelöscht wird oder das Objekt zurückgesetzt wird.
+
+Optional:
+
+* ältere Spurbereiche transparenter darstellen
+* maximale Spurlänge begrenzen
+* Button „Spuren löschen“
+
+---
+
+## Interaktionsmöglichkeiten
+
+Die Nutzeroberfläche soll einfach und unterrichtstauglich sein.
+
+### Steuerungselemente
+
+Es soll mindestens folgende Bedienelemente geben:
+
+1. **Zentralmasse**
+
+   * Slider
+   * Wertebereich zum Beispiel 0 bis 100
+   * Änderung beeinflusst:
+
+     * Gitterkrümmung
+     * Bewegung der Testmassen
+     * Ablenkung der Lichtstrahlen
+
+2. **Krümmungs-Verstärkung**
+
+   * Slider
+   * dient nur der visuellen Darstellung
+   * verändert nicht zwingend die physikalische Bahnrechnung
+   * Beschriftung: „Darstellung verstärken“
+
+3. **Objekttyp**
+
+   * Auswahl:
+
+     * Testmasse
+     * Lichtstrahl
+
+4. **Startmodus**
+
+   * Objekt per Mausklick auf dem Canvas setzen
+   * Richtung und Anfangsgeschwindigkeit per Ziehen mit der Maus festlegen
+   * Beispiel:
+
+     * Mausklick setzt Startpunkt
+     * Ziehen definiert Richtung und Geschwindigkeit
+     * Loslassen startet das Objekt
+
+5. **Simulation starten / pausieren**
+
+   * Button „Start“
+   * Button „Pause“
+   * Button „Reset“
+
+6. **Spuren löschen**
+
+   * Button „Spuren löschen“
+
+7. **Geschwindigkeit der Simulation**
+
+   * Slider für Simulationsgeschwindigkeit
+   * beeinflusst die Zeitschrittgröße oder die Anzahl der Updates pro Frame
+
+8. **Optional: Vektoren anzeigen**
+
+   * Checkbox
+   * zeigt Geschwindigkeitsvektoren und eventuell Beschleunigungsvektoren
+
+9. **Optional: Lichtablenkung verstärken**
+
+   * Slider
+   * didaktischer Verstärkungsfaktor für die Lichtablenkung
+   * wichtig, damit der Effekt im Unterricht sichtbar wird
+
+---
+
+## Physikalisches Modell
+
+Die Simulation soll bewusst ein didaktisches Modell verwenden.
+
+Bitte im Code und in der Benutzeroberfläche klar machen:
+
+> Diese Simulation ist ein vereinfachtes Modell. Sie zeigt qualitativ, wie Massen die Geometrie der Umgebung verändern und dadurch Bahnen beeinflussen können. Sie ist keine exakte ART-Rechnung.
+
+---
+
+## Modell für Testmassen
+
+Für Testmassen darf ein Newton-ähnliches Bewegungsmodell verwendet werden, weil es für Umlaufbahnen anschaulich und stabil ist.
+
+Die Zentralmasse befindet sich bei:
+
+```text
+center = (0, 0)
+```
+
+Für eine Testmasse an Position `p` gilt:
+
+```text
+rVec = center - p
+r = length(rVec)
+a = G * M * rVec / (r² + softening²)^(3/2)
+```
+
+Dann Integration zum Beispiel mit semi-implizitem Euler-Verfahren:
+
+```text
+velocity += acceleration * dt
+position += velocity * dt
+```
+
+Besser, wenn ohne großen Aufwand möglich:
+
+* Velocity-Verlet
+* Runge-Kutta 4
+
+Für den Unterricht reicht aber ein stabiler semi-impliziter Euler-Integrator.
+
+### Verhalten
+
+Eine Testmasse soll je nach Anfangsgeschwindigkeit:
+
+* in die Zentralmasse fallen
+* an ihr vorbeifliegen
+* eine gekrümmte Bahn beschreiben
+* bei passenden Einstellungen eine Umlaufbahn zeigen
+
+Wenn die Testmasse die Zentralmasse berührt oder einen Mindestabstand unterschreitet, soll sie als „kollidiert“ gelten und gestoppt werden.
+
+---
+
+## Modell für Lichtstrahlen
+
+Lichtstrahlen sollen nicht einfach nach Newton wie Massen beschleunigt werden.
+
+Stattdessen soll ein qualitatives Strahlenmodell verwendet werden.
+
+Eine einfache Möglichkeit ist ein optisches Analogmodell mit einem effektiven Brechungsindex:
+
+```text
+n(r) = 1 + lensStrength * M / sqrt(r² + softening²)
+```
+
+Dabei ist:
+
+* `n(r)` ein effektiver Brechungsindex
+* `M` die Zentralmasse
+* `lensStrength` ein didaktischer Verstärkungsfaktor
+* `softening` ein Glättungswert
+
+Die Richtung des Lichtstrahls soll sich in Richtung des Gradienten von `n(r)` ändern. Die Geschwindigkeit des Lichtstrahls bleibt betragsmäßig konstant.
+
+Qualitativ:
+
+* Licht bewegt sich immer mit konstanter Geschwindigkeit.
+* Nur die Richtung wird durch die Krümmung verändert.
+* Je näher der Strahl an der Zentralmasse vorbeigeht, desto stärker wird er abgelenkt.
+* Je größer die Zentralmasse, desto stärker wird er abgelenkt.
+
+Vereinfachter Rechenansatz:
+
+```text
+direction = normalize(direction)
+
+gradN = gradientOfRefractiveIndex(position)
+
+perpendicularComponent = gradN - direction * dot(gradN, direction)
+
+direction += perpendicularComponent * dt * lightBendingFactor
+direction = normalize(direction)
+
+position += direction * c * dt
+```
+
+Wichtig:
+
+Der Betrag der Lichtgeschwindigkeit soll konstant bleiben. Es soll keine Beschleunigung im Sinne einer Geschwindigkeitszunahme geben, sondern nur eine Richtungsänderung.
+
+### Erwartetes Verhalten
+
+Ein Lichtstrahl, der weit an der Zentralmasse vorbeiläuft, wird kaum abgelenkt.
+
+Ein Lichtstrahl, der nahe an der Zentralmasse vorbeiläuft, wird sichtbar abgelenkt.
+
+Bei sehr starker Zentralmasse und sehr nahem Vorbeiflug darf der Strahl stark gekrümmt werden. Er muss aber nicht physikalisch exakt um die Masse kreisen.
+
+---
+
+## Koordinatensystem
+
+Intern soll ein Weltkoordinatensystem verwendet werden.
+
+Beispiel:
+
+```text
+world x: -400 bis +400
+world y: -300 bis +300
+```
+
+Der Canvas bildet diese Weltkoordinaten auf Bildschirmkoordinaten ab.
+
+Die Zentralmasse liegt bei:
+
+```text
+(0, 0)
+```
+
+Der Renderer soll Funktionen enthalten wie:
+
+```text
+worldToScreen(position)
+screenToWorld(position)
+```
+
+Für das gekrümmte Gitter kann eine zusätzliche Projektion verwendet werden:
+
+```text
+surfaceHeight(position)
+projectSurfacePoint(x, y, z)
+```
+
+---
+
+## Rendering
+
+### Gewünschte visuelle Elemente
+
+Die Simulation soll folgende Elemente darstellen:
+
+1. Hintergrund
+2. gekrümmtes Gitternetz
+3. Zentralmasse
+4. eingefügte Testmassen
+5. eingefügte Lichtstrahlen
+6. Bahnspuren
+7. optional Vektorpfeile
+8. kurze Legende
+
+### Gitterdarstellung
+
+Das Gitter soll aus Linien bestehen.
+
+Für jede Gitterlinie werden viele Punkte berechnet. Für jeden Punkt:
+
+1. Weltposition bestimmen
+2. Abstand zur Zentralmasse berechnen
+3. Oberflächenhöhe `z` berechnen
+4. 2,5D-Projektion auf den Canvas berechnen
+5. Linie durch die projizierten Punkte zeichnen
+
+Dadurch soll die Umgebung der Masse sichtbar „eingedellt“ werden.
+
+### Objekte auf der Oberfläche
+
+Wenn Objekte und Spuren gezeichnet werden, sollen sie möglichst auf derselben gekrümmten Oberfläche liegen.
+
+Dazu:
+
+1. Weltposition des Objekts bestimmen
+2. zugehörige Höhe `z = surfaceHeight(position)` berechnen
+3. Punkt mit `projectSurfacePoint` auf den Canvas projizieren
+
+---
+
+## Bedienung per Maus
+
+### Objekt hinzufügen
+
+Die Bedienung soll möglichst intuitiv sein:
+
+1. Nutzer wählt Objekttyp:
+
+   * Testmasse
+   * Lichtstrahl
+
+2. Nutzer klickt auf den Canvas und hält die Maustaste gedrückt.
+
+3. Beim Ziehen erscheint ein Pfeil:
+
+   * Startpunkt = Klickposition
+   * Pfeilrichtung = Bewegungsrichtung
+   * Pfeillänge = Anfangsgeschwindigkeit
+
+4. Beim Loslassen wird das Objekt erzeugt.
+
+### Unterschiede
+
+Bei Testmassen:
+
+* Pfeillänge bestimmt die Anfangsgeschwindigkeit.
+* Bahn wird durch das Testmassenmodell berechnet.
+
+Bei Lichtstrahlen:
+
+* Pfeillänge bestimmt nur die Richtung.
+* Geschwindigkeit ist konstant.
+* Bahn wird durch das Lichtmodell berechnet.
+
+---
+
+## Benutzeroberfläche
+
+Die Oberfläche soll klar und schulgeeignet sein.
+
+Vorschlag:
+
+* links oder rechts ein Steuerpanel
+* daneben die große Simulation
+* unter dem Canvas eine kurze Erklärung
+
+### Beispieltexte in der UI
+
+Kurzer Erklärungstext:
+
+> Diese Simulation zeigt ein vereinfachtes Modell: Eine große Masse krümmt die dargestellte Umgebung. Testkörper und Lichtstrahlen bewegen sich dadurch auf gekrümmten Bahnen. Die Darstellung ist didaktisch überhöht und keine exakte Rechnung der Allgemeinen Relativitätstheorie.
+
+Beschriftungen:
+
+* „Zentralmasse“
+* „Krümmung sichtbar verstärken“
+* „Objekttyp“
+* „Testmasse“
+* „Lichtstrahl“
+* „Simulation starten“
+* „Pause“
+* „Reset“
+* „Spuren löschen“
+* „Lichtablenkung verstärken“
+* „Vektoren anzeigen“
+
+---
+
+## Unterrichtsmodus
+
+Es soll optional ein einfacher Unterrichtsmodus integriert werden.
+
+Dieser kann als Infobox angezeigt werden.
+
+### Mögliche Leitfragen
+
+1. Was passiert mit dem Gitter, wenn die Zentralmasse größer wird?
+2. Wie verändert sich die Bahn einer Testmasse bei gleicher Anfangsgeschwindigkeit?
+3. Wann entsteht ein Vorbeiflug?
+4. Wann entsteht eine Umlaufbahn?
+5. Wird ein Lichtstrahl in der Nähe der Zentralmasse abgelenkt?
+6. Warum darf man die Gitterdarstellung nicht wörtlich nehmen?
+
+Diese Leitfragen können dauerhaft sichtbar oder per Button einblendbar sein.
+
+---
+
+## Parameter-Vorschläge
+
+Die Simulation soll mit sinnvollen Startwerten geladen werden.
+
+Beispiel:
+
+```text
+centralMass = 40
+G = 80
+softening = 30
+warpStrength = 180
+simulationSpeed = 1
+lightSpeed = 220
+lightBendingFactor = 60
+trailLength = 1200
+```
+
+Diese Werte sind nicht fest vorgeschrieben. Sie sollen beim Entwickeln so angepasst werden, dass die Simulation stabil, gut sichtbar und didaktisch brauchbar ist.
+
+Wichtig ist:
+
+* Die Standardwerte sollen sofort einen sichtbaren Effekt zeigen.
+* Lichtstrahlen sollen bei nahem Vorbeiflug sichtbar abgelenkt werden.
+* Testmassen sollen je nach Startgeschwindigkeit verschiedene Bahnformen zeigen können.
+
+---
+
+## Stabilität und Grenzen
+
+Die Simulation soll stabil laufen.
+
+### Notwendige Schutzmaßnahmen
+
+* Mindestabstand zur Zentralmasse verwenden
+* Softening-Term verwenden, damit keine Singularität entsteht
+* maximale Beschleunigung optional begrenzen
+* sehr große Zeitschritte vermeiden
+* Objekte entfernen oder stoppen, wenn sie weit außerhalb des sichtbaren Bereichs liegen
+* Trail-Länge begrenzen, damit die Performance nicht leidet
+
+---
+
+## Klassen und Datenstrukturen
+
+Nutze klare Typen oder Klassen.
+
+Beispielhafte Typen:
+
+```ts
+type Vector2 = {
+  x: number;
+  y: number;
+};
+
+type BodyType = "mass" | "light";
+
+type SimObject = {
+  id: string;
+  type: BodyType;
+  position: Vector2;
+  velocity: Vector2;
+  direction?: Vector2;
+  trail: Vector2[];
+  active: boolean;
+};
+```
+
+Mögliche Module:
+
+### `physics.ts`
+
+Aufgaben:
+
+* Vektoroperationen
+* Beschleunigung für Testmassen
+* Richtungsänderung für Lichtstrahlen
+* Integration eines Simulationsschritts
+* Kollisionsprüfung
+
+### `renderer.ts`
+
+Aufgaben:
+
+* Canvas zeichnen
+* Gitter zeichnen
+* Zentralmasse zeichnen
+* Objekte zeichnen
+* Spuren zeichnen
+* Projektion der gekrümmten Oberfläche
+
+### `controls.ts`
+
+Aufgaben:
+
+* UI-Elemente auslesen
+* Event Listener registrieren
+* Mausinteraktion verwalten
+* Start/Pause/Reset steuern
+
+### `simulation.ts`
+
+Aufgaben:
+
+* Simulationszustand verwalten
+* Update-Loop
+* Liste aller Objekte
+* Parameter speichern
+* Reset-Funktionen
+
+---
+
+## Pseudocode für den Simulationsloop
+
+```text
+function animationLoop(timestamp):
+    berechne deltaTime
+
+    wenn simulationRunning:
+        für jedes Objekt:
+            wenn Objekt aktiv:
+                updateObject(object, deltaTime)
+                neue Position zur Trail hinzufügen
+                wenn Objekt kollidiert oder weit außerhalb:
+                    Objekt deaktivieren
+
+    renderer.clear()
+    renderer.drawGrid()
+    renderer.drawTrails()
+    renderer.drawCentralMass()
+    renderer.drawObjects()
+    renderer.drawDragPreviewFallsAktiv()
+
+    requestAnimationFrame(animationLoop)
+```
+
+---
+
+## Akzeptanzkriterien
+
+Das Projekt gilt als erfolgreich umgesetzt, wenn folgende Punkte erfüllt sind:
+
+1. Die Simulation läuft lokal im Browser.
+2. Eine feste Zentralmasse wird in der Mitte angezeigt.
+3. Ein Gitternetz wird dauerhaft sichtbar dargestellt.
+4. Das Gitternetz wird abhängig von der Zentralmasse sichtbar gekrümmt.
+5. Die Stärke der Zentralmasse kann per Slider verändert werden.
+6. Eine Testmasse kann per Maus hinzugefügt werden.
+7. Die Testmasse bewegt sich abhängig von Anfangsgeschwindigkeit und Zentralmasse auf einer gekrümmten Bahn.
+8. Ein Lichtstrahl kann per Maus hinzugefügt werden.
+9. Der Lichtstrahl wird in der Nähe der Zentralmasse sichtbar abgelenkt.
+10. Die Lichtgeschwindigkeit bleibt dabei betragsmäßig konstant.
+11. Die Bahnspuren bleiben sichtbar.
+12. Es gibt Buttons für Start, Pause, Reset und Spuren löschen.
+13. Die Simulation ist responsiv und auf einem Beamer gut erkennbar.
+14. Der Code ist verständlich strukturiert und ausführlich kommentiert.
+15. In der UI steht klar, dass es sich um ein didaktisches Modell handelt.
+
+---
+
+## Erweiterungen, falls Zeit bleibt
+
+Diese Punkte sind optional und nicht für die erste Version notwendig:
+
+1. Mehrere Zentralmassen
+2. Umschalten zwischen Newton-Modell und Krümmungsmodell
+3. Anzeige von Fluchtgeschwindigkeit
+4. Anzeige von Energie bei Testmassen
+5. Export eines Screenshots
+6. Vorgefertigte Szenarien:
+
+   * Vorbeiflug
+   * Umlaufbahn
+   * Sturz in die Zentralmasse
+   * Lichtablenkung
+   * starke Gravitationslinse
+7. Dunkles Farbschema für Beamer
+8. Erklärungstexte mit Schritt-für-Schritt-Aufgaben für Schülerinnen und Schüler
+
+---
+
+## Wichtige didaktische Hinweise
+
+Die Simulation soll keine falsche Exaktheit vortäuschen.
+
+Bitte in README und UI deutlich formulieren:
+
+* Das Gitter ist ein Modellbild.
+* Die „Eindellung“ ist nicht wörtlich zu verstehen.
+* Raumzeit ist vierdimensional; die Simulation zeigt nur eine vereinfachte zweidimensionale Analogie.
+* Die Testmassenbewegung darf Newton-ähnlich berechnet werden.
+* Die Lichtablenkung wird qualitativ modelliert und didaktisch verstärkt.
+* Ziel ist Veranschaulichung, nicht Forschungssimulation.
+
+---
+
+## Gewünschter Stil
+
+Die Anwendung soll modern, ruhig und übersichtlich wirken.
+
+Geeignet für:
+
+* Demonstration am Beamer
+* kurze Schülerexperimente
+* Unterrichtsgespräch
+* Einstieg in Allgemeine Relativität
+
+Die Simulation soll ohne lange Erklärung bedienbar sein.
+
+Priorität:
+
+1. Verständlichkeit
+2. Stabilität
+3. Sichtbarkeit der Effekte
+4. Saubere Struktur
+5. Physikalische Ehrlichkeit
