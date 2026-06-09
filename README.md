@@ -32,6 +32,7 @@ base: "/SpaceTime/"
 - Im Canvas klicken, ziehen und loslassen, um eine Testmasse oder einen Lichtstrahl zu starten.
 - Bei Testmassen bestimmt die Pfeillänge die Anfangsgeschwindigkeit.
 - Bei Lichtstrahlen bestimmt die Pfeillänge nur die Richtung; die Lichtgeschwindigkeit bleibt konstant.
+- Auf Touch-Geräten erzeugt ein Finger Objekte; zwei Finger drehen die Kamera und Pinch zoomt.
 
 ## Didaktischer Hinweis
 

@@ -29,6 +29,11 @@ export class Controls {
   private readonly resetCameraButton = requireElement("resetCameraButton", HTMLButtonElement);
   private cameraDragPointerId: number | null = null;
   private lastCameraPointer: Vector2 | null = null;
+  private objectDragPointerId: number | null = null;
+  private readonly activeTouchPointers = new Map<number, Vector2>();
+  private touchCameraActive = false;
+  private lastTouchCentroid: Vector2 | null = null;
+  private lastTouchDistance = 0;
 
   constructor(
     private readonly simulation: Simulation,
@@ -83,6 +88,16 @@ export class Controls {
     this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
     this.canvas.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "touch") {
+        this.activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        this.canvas.setPointerCapture(event.pointerId);
+
+        if (this.activeTouchPointers.size >= 2) {
+          this.startTouchCameraGesture();
+          return;
+        }
+      }
+
       if (this.isCameraControl(event)) {
         this.simulation.state.drag = null;
         this.cameraDragPointerId = event.pointerId;
@@ -92,6 +107,7 @@ export class Controls {
       }
 
       const start = this.pointerToWorld(event);
+      this.objectDragPointerId = event.pointerId;
       this.canvas.setPointerCapture(event.pointerId);
       this.simulation.state.drag = {
         active: true,
@@ -101,6 +117,15 @@ export class Controls {
     });
 
     this.canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "touch" && this.activeTouchPointers.has(event.pointerId)) {
+        this.activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (this.touchCameraActive) {
+          this.updateTouchCameraGesture();
+          return;
+        }
+      }
+
       if (this.cameraDragPointerId === event.pointerId && this.lastCameraPointer) {
         const deltaX = event.clientX - this.lastCameraPointer.x;
         const deltaY = event.clientY - this.lastCameraPointer.y;
@@ -109,31 +134,60 @@ export class Controls {
         return;
       }
 
+      if (this.objectDragPointerId !== event.pointerId) return;
       if (!this.simulation.state.drag?.active) return;
       this.simulation.state.drag.current = this.pointerToWorld(event);
     });
 
     this.canvas.addEventListener("pointerup", (event) => {
+      if (event.pointerType === "touch") {
+        this.activeTouchPointers.delete(event.pointerId);
+
+        if (this.touchCameraActive) {
+          if (this.activeTouchPointers.size < 2) {
+            this.endTouchCameraGesture();
+          } else {
+            this.resetTouchCameraMetrics();
+          }
+          this.releasePointer(event.pointerId);
+          return;
+        }
+      }
+
       if (this.cameraDragPointerId === event.pointerId) {
         this.cameraDragPointerId = null;
         this.lastCameraPointer = null;
-        this.canvas.releasePointerCapture(event.pointerId);
+        this.releasePointer(event.pointerId);
+        return;
+      }
+
+      if (this.objectDragPointerId !== event.pointerId) {
+        this.releasePointer(event.pointerId);
         return;
       }
 
       const drag = this.simulation.state.drag;
-      if (!drag?.active) return;
+      if (!drag?.active) {
+        this.objectDragPointerId = null;
+        this.releasePointer(event.pointerId);
+        return;
+      }
 
       const end = this.pointerToWorld(event);
       this.simulation.addObject(drag.start, end);
       this.simulation.state.drag = null;
-      this.canvas.releasePointerCapture(event.pointerId);
+      this.objectDragPointerId = null;
+      this.releasePointer(event.pointerId);
     });
 
-    this.canvas.addEventListener("pointercancel", () => {
+    this.canvas.addEventListener("pointercancel", (event) => {
+      this.activeTouchPointers.delete(event.pointerId);
       this.simulation.state.drag = null;
       this.cameraDragPointerId = null;
       this.lastCameraPointer = null;
+      this.objectDragPointerId = null;
+      this.endTouchCameraGesture();
+      this.releasePointer(event.pointerId);
     });
 
     this.canvas.addEventListener(
@@ -148,6 +202,62 @@ export class Controls {
 
   private isCameraControl(event: PointerEvent): boolean {
     return event.button === 2 || event.shiftKey;
+  }
+
+  private startTouchCameraGesture(): void {
+    this.simulation.state.drag = null;
+    this.objectDragPointerId = null;
+    this.touchCameraActive = true;
+    this.resetTouchCameraMetrics();
+  }
+
+  private updateTouchCameraGesture(): void {
+    const metrics = this.getTouchCameraMetrics();
+    if (!metrics || !this.lastTouchCentroid) return;
+
+    const deltaX = metrics.centroid.x - this.lastTouchCentroid.x;
+    const deltaY = metrics.centroid.y - this.lastTouchCentroid.y;
+    this.renderer.rotateCamera(deltaX, deltaY);
+
+    if (this.lastTouchDistance > 0) {
+      this.renderer.zoomCamera((this.lastTouchDistance - metrics.distance) * 1.15);
+    }
+
+    this.lastTouchCentroid = metrics.centroid;
+    this.lastTouchDistance = metrics.distance;
+  }
+
+  private endTouchCameraGesture(): void {
+    this.touchCameraActive = false;
+    this.lastTouchCentroid = null;
+    this.lastTouchDistance = 0;
+  }
+
+  private resetTouchCameraMetrics(): void {
+    const metrics = this.getTouchCameraMetrics();
+    this.lastTouchCentroid = metrics?.centroid ?? null;
+    this.lastTouchDistance = metrics?.distance ?? 0;
+  }
+
+  private getTouchCameraMetrics(): { centroid: Vector2; distance: number } | null {
+    const points = [...this.activeTouchPointers.values()];
+    if (points.length < 2) return null;
+
+    const first = points[0];
+    const second = points[1];
+    return {
+      centroid: {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2
+      },
+      distance: Math.hypot(first.x - second.x, first.y - second.y)
+    };
+  }
+
+  private releasePointer(pointerId: number): void {
+    if (this.canvas.hasPointerCapture(pointerId)) {
+      this.canvas.releasePointerCapture(pointerId);
+    }
   }
 
   private pointerToWorld(event: PointerEvent): Vector2 {
