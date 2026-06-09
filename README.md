@@ -11,6 +11,20 @@ npm run dev
 
 Danach die angezeigte lokale Vite-Adresse im Browser öffnen.
 
+## Veröffentlichung auf GitHub Pages
+
+Das Projekt ist für die Project-Page `https://phinau.github.io/SpaceTime/` vorbereitet.
+
+1. Änderungen auf den Branch `main` pushen.
+2. In GitHub unter `Settings` -> `Pages` als Quelle `GitHub Actions` auswählen.
+3. Der Workflow `Deploy to GitHub Pages` baut die Vite-App und veröffentlicht den Ordner `dist`.
+
+Der wichtige Vite-Pfad steht in `vite.config.ts`:
+
+```ts
+base: "/SpaceTime/"
+```
+
 ## Bedienung
 
 - Zentralmasse, sichtbare Krümmung, Simulationsgeschwindigkeit und Lichtablenkung werden über Slider verändert.
