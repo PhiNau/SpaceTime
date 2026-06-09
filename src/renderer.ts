@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { centralBodyRadius, normalize } from "./physics";
 import type { SimObject, SimulationState, Vector2 } from "./types";
 
@@ -7,18 +8,50 @@ type ScreenPoint = {
 };
 
 export class Renderer {
-  private readonly ctx: CanvasRenderingContext2D;
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly scene = new THREE.Scene();
+  private readonly camera = new THREE.PerspectiveCamera(44, 1, 1, 5000);
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly pointer = new THREE.Vector2();
+  private readonly surfaceGroup = new THREE.Group();
+  private readonly dynamicGroup = new THREE.Group();
+  private readonly surfaceMaterial = new THREE.MeshStandardMaterial({
+    color: 0x273239,
+    roughness: 0.84,
+    metalness: 0.03,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.72
+  });
+  private readonly wireMaterial = new THREE.LineBasicMaterial({
+    color: 0x5bd6d0,
+    transparent: true,
+    opacity: 0.33
+  });
+
   private width = 1;
   private height = 1;
-  private scale = 1;
-  private origin: ScreenPoint = { x: 0, y: 0 };
+  private surfaceMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  private surfaceWire: THREE.LineSegments | null = null;
+  private lastSurfaceKey = "";
+  private readonly surfaceSize = 960;
+  private readonly surfaceSegments = 78;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("Canvas 2D wird vom Browser nicht unterstützt.");
-    }
-    this.ctx = context;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false
+    });
+    this.renderer.setClearColor(0x101317, 1);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    this.surfaceMesh = new THREE.Mesh(this.createSurfaceGeometry(null), this.surfaceMaterial);
+    this.surfaceGroup.add(this.surfaceMesh);
+    this.scene.add(this.surfaceGroup);
+    this.scene.add(this.dynamicGroup);
+
+    this.setupScene();
     this.resize();
   }
 
@@ -27,349 +60,301 @@ export class Renderer {
     const ratio = window.devicePixelRatio || 1;
     this.width = Math.max(320, rect.width);
     this.height = Math.max(320, rect.height);
-    this.canvas.width = Math.floor(this.width * ratio);
-    this.canvas.height = Math.floor(this.height * ratio);
-    this.ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
-    this.scale = Math.min(this.width / 920, this.height / 680);
-    this.origin = {
-      x: this.width * 0.5,
-      y: this.height * 0.43
-    };
+    this.renderer.setPixelRatio(Math.min(2, ratio));
+    this.renderer.setSize(this.width, this.height, false);
+    this.camera.aspect = this.width / this.height;
+    this.camera.updateProjectionMatrix();
   }
 
   screenToWorld(point: ScreenPoint, state: SimulationState): Vector2 {
-    const x = (point.x - this.origin.x) / this.scale;
-    let y = (point.y - this.origin.y) / (this.scale * 0.58);
+    this.updateSurface(state);
+    this.pointer.set((point.x / this.width) * 2 - 1, -(point.y / this.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    // Invert the same curved-surface projection used for drawing, so pointer
-    // starts stay under the cursor even when the visual warp is high.
-    for (let i = 0; i < 8; i++) {
-      const projectedY = this.projectSurfacePoint(x, y, this.surfaceHeight({ x, y }, state)).y;
-      const error = projectedY - point.y;
-      if (Math.abs(error) < 0.2) break;
-
-      const sampleStep = 1;
-      const projectedYPlus = this.projectSurfacePoint(x, y + sampleStep, this.surfaceHeight({ x, y: y + sampleStep }, state)).y;
-      const derivative = projectedYPlus - projectedY;
-
-      if (Math.abs(derivative) < 0.01) break;
-      y -= error / derivative;
+    const hit = this.raycaster.intersectObject(this.surfaceMesh, false)[0];
+    if (hit) {
+      return { x: hit.point.x, y: hit.point.z };
     }
 
-    return { x, y };
+    const fallbackPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const fallbackPoint = new THREE.Vector3();
+    this.raycaster.ray.intersectPlane(fallbackPlane, fallbackPoint);
+    return { x: fallbackPoint.x, y: fallbackPoint.z };
   }
 
   worldToScreen(position: Vector2, state: SimulationState): ScreenPoint {
-    const z = this.surfaceHeight(position, state);
-    return this.projectSurfacePoint(position.x, position.y, z);
+    const point = this.worldToThree(position, state).project(this.camera);
+    return {
+      x: ((point.x + 1) / 2) * this.width,
+      y: ((-point.y + 1) / 2) * this.height
+    };
   }
 
   surfaceHeight(position: Vector2, state: SimulationState): number {
     const { centralMass, softening, visualWarp } = state.params;
-    if (centralMass <= 0) return 0;
+    if (centralMass <= 0 || visualWarp <= 0) return 0;
 
     const r = Math.sqrt(position.x * position.x + position.y * position.y + softening * softening);
     const z = (-70 * visualWarp * centralMass) / r;
-    return Math.max(z, -230);
-  }
-
-  projectSurfacePoint(x: number, y: number, z: number): ScreenPoint {
-    return {
-      x: this.origin.x + x * this.scale,
-      y: this.origin.y + y * this.scale * 0.58 - z * this.scale * 0.95
-    };
+    return Math.max(z, -250);
   }
 
   render(state: SimulationState): void {
-    this.clear();
-    this.drawFunnelShading(state);
-    this.drawGrid(state);
-    this.drawDepthGuides(state);
-    this.drawContourRings(state);
-    this.drawTrails(state);
-    this.drawCentralMass(state);
-    this.drawObjects(state);
-    this.drawDragPreview(state);
-    this.drawLegend(state);
+    this.updateSurface(state);
+    this.drawDynamicScene(state);
+    this.renderer.render(this.scene, this.camera);
   }
 
-  private clear(): void {
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, this.height);
-    gradient.addColorStop(0, "#101317");
-    gradient.addColorStop(0.62, "#161b1d");
-    gradient.addColorStop(1, "#20201d");
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, this.width, this.height);
+  private setupScene(): void {
+    this.scene.fog = new THREE.Fog(0x101317, 760, 1800);
+
+    const ambient = new THREE.AmbientLight(0xc8f6ff, 1.2);
+    const key = new THREE.DirectionalLight(0xfff0c0, 2.8);
+    key.position.set(-260, 460, 320);
+    const fill = new THREE.PointLight(0xf58d56, 70_000, 900);
+    fill.position.set(0, -90, 0);
+
+    this.scene.add(ambient, key, fill);
+
+    this.camera.position.set(0, 360, 650);
+    this.camera.lookAt(0, -40, 0);
   }
 
-  private drawGrid(state: SimulationState): void {
-    const extentX = Math.max(520, this.width / this.scale / 2 + 120);
-    const extentY = Math.max(420, this.height / (this.scale * 0.58) / 2 + 100);
-    const spacing = 50;
-    const step = 14;
+  private updateSurface(state: SimulationState): void {
+    const params = state.params;
+    const surfaceKey = [
+      params.centralMass.toFixed(2),
+      params.visualWarp.toFixed(2),
+      params.softening.toFixed(2),
+      this.width,
+      this.height
+    ].join(":");
 
-    this.ctx.save();
-    this.ctx.lineWidth = 1.05;
+    if (surfaceKey === this.lastSurfaceKey) return;
+    this.lastSurfaceKey = surfaceKey;
 
-    for (let x = -extentX; x <= extentX; x += spacing) {
-      const points = Array.from({ length: Math.ceil((2 * extentY) / step) + 1 }, (_, index) => ({
-        x,
-        y: -extentY + index * step
-      }));
-      this.drawProjectedLine(points, state, "rgba(91, 214, 208, 0.30)");
+    const nextGeometry = this.createSurfaceGeometry(state);
+    this.surfaceMesh.geometry.dispose();
+    this.surfaceMesh.geometry = nextGeometry;
+
+    if (this.surfaceWire) {
+      this.surfaceWire.geometry.dispose();
+      this.surfaceGroup.remove(this.surfaceWire);
     }
 
-    for (let y = -extentY; y <= extentY; y += spacing) {
-      const points = Array.from({ length: Math.ceil((2 * extentX) / step) + 1 }, (_, index) => ({
-        x: -extentX + index * step,
-        y
-      }));
-      this.drawProjectedLine(points, state, "rgba(245, 185, 92, 0.23)");
+    const wireGeometry = new THREE.WireframeGeometry(nextGeometry);
+    this.surfaceWire = new THREE.LineSegments(wireGeometry, this.wireMaterial);
+    this.surfaceGroup.add(this.surfaceWire);
+  }
+
+  private createSurfaceGeometry(state: SimulationState | null): THREE.PlaneGeometry {
+    const geometry = new THREE.PlaneGeometry(this.surfaceSize, this.surfaceSize, this.surfaceSegments, this.surfaceSegments);
+    const positions = geometry.attributes.position;
+
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i);
+      const z = positions.getY(i);
+      const y = state ? this.surfaceHeight({ x, y: z }, state) : 0;
+      positions.setXYZ(i, x, y, z);
     }
 
-    this.ctx.restore();
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
   }
 
-  private drawFunnelShading(state: SimulationState): void {
-    const mass = state.params.centralMass;
-    if (mass <= 0) return;
-
-    const center = this.worldToScreen({ x: 0, y: 0 }, state);
-    const radiusX = (210 + mass * 2.1) * this.scale;
-    const radiusY = radiusX * 0.58;
-
-    this.ctx.save();
-    this.ctx.translate(center.x, center.y);
-    this.ctx.scale(1, 0.58);
-
-    const shadow = this.ctx.createRadialGradient(0, 0, radiusX * 0.05, 0, 0, radiusX);
-    shadow.addColorStop(0, "rgba(20, 7, 8, 0.72)");
-    shadow.addColorStop(0.35, "rgba(137, 61, 48, 0.24)");
-    shadow.addColorStop(0.72, "rgba(242, 178, 89, 0.08)");
-    shadow.addColorStop(1, "rgba(242, 178, 89, 0)");
-
-    this.ctx.fillStyle = shadow;
-    this.ctx.beginPath();
-    this.ctx.arc(0, 0, radiusX, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    const rim = this.ctx.createRadialGradient(0, 0, radiusX * 0.45, 0, 0, radiusX * 0.9);
-    rim.addColorStop(0, "rgba(255, 255, 255, 0)");
-    rim.addColorStop(0.55, "rgba(255, 217, 142, 0.04)");
-    rim.addColorStop(0.78, "rgba(255, 217, 142, 0.16)");
-    rim.addColorStop(1, "rgba(255, 217, 142, 0)");
-
-    this.ctx.fillStyle = rim;
-    this.ctx.beginPath();
-    this.ctx.arc(0, 0, radiusX * 0.95, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    this.ctx.restore();
-
-    const lowerShadow = this.ctx.createRadialGradient(
-      center.x,
-      center.y + radiusY * 0.45,
-      radiusY * 0.1,
-      center.x,
-      center.y + radiusY * 0.45,
-      radiusX * 0.72
-    );
-    lowerShadow.addColorStop(0, "rgba(0, 0, 0, 0.28)");
-    lowerShadow.addColorStop(1, "rgba(0, 0, 0, 0)");
-    this.ctx.fillStyle = lowerShadow;
-    this.ctx.beginPath();
-    this.ctx.ellipse(center.x, center.y + radiusY * 0.42, radiusX * 0.75, radiusY * 0.45, 0, 0, Math.PI * 2);
-    this.ctx.fill();
+  private drawDynamicScene(state: SimulationState): void {
+    this.clearGroup(this.dynamicGroup);
+    this.addFunnelGuides(state);
+    this.addCentralMass(state);
+    this.addTrails(state);
+    this.addObjects(state);
+    this.addDragPreview(state);
   }
 
-  private drawDepthGuides(state: SimulationState): void {
+  private clearGroup(group: THREE.Group): void {
+    for (const child of [...group.children]) {
+      child.traverse((object) => {
+        const disposable = object as {
+          geometry?: THREE.BufferGeometry;
+          material?: THREE.Material | THREE.Material[];
+        };
+
+        disposable.geometry?.dispose();
+        if (Array.isArray(disposable.material)) {
+          disposable.material.forEach((material) => this.disposeMaterial(material));
+        } else if (disposable.material) {
+          this.disposeMaterial(disposable.material);
+        }
+      });
+      group.remove(child);
+    }
+  }
+
+  private disposeMaterial(material: THREE.Material): void {
+    const maybeTextured = material as THREE.Material & { map?: THREE.Texture };
+    maybeTextured.map?.dispose();
+    material.dispose();
+  }
+
+  private addFunnelGuides(state: SimulationState): void {
     if (state.params.centralMass <= 0) return;
 
-    this.ctx.save();
-    this.ctx.lineWidth = 1;
+    const ringMaterial = new THREE.LineBasicMaterial({
+      color: 0xffdc88,
+      transparent: true,
+      opacity: 0.28
+    });
 
-    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 10) {
-      const points = Array.from({ length: 22 }, (_, index) => {
-        const radius = 42 + index * 15;
-        return {
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius
-        };
-      });
-      this.drawProjectedLine(points, state, "rgba(255, 226, 153, 0.12)");
+    [52, 78, 112, 156, 212, 282, 366].forEach((radius, index) => {
+      const points: THREE.Vector3[] = [];
+      for (let i = 0; i <= 160; i++) {
+        const angle = (i / 160) * Math.PI * 2;
+        points.push(this.worldToThree({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius }, state));
+      }
+
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), ringMaterial.clone());
+      const material = line.material as THREE.LineBasicMaterial;
+      material.opacity = Math.max(0.08, 0.24 - index * 0.02);
+      this.dynamicGroup.add(line);
+    });
+
+    const spokeMaterial = new THREE.LineBasicMaterial({
+      color: 0x9fefff,
+      transparent: true,
+      opacity: 0.16
+    });
+
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 12) {
+      const points: THREE.Vector3[] = [];
+      for (let r = 42; r <= 420; r += 20) {
+        points.push(this.worldToThree({ x: Math.cos(angle) * r, y: Math.sin(angle) * r }, state));
+      }
+      this.dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), spokeMaterial));
     }
-
-    this.ctx.restore();
   }
 
-  private drawContourRings(state: SimulationState): void {
-    if (state.params.centralMass <= 0) return;
-
-    this.ctx.save();
-    this.ctx.lineWidth = 1.4;
-
-    const rings = [54, 82, 118, 164, 222, 292, 374];
-    rings.forEach((radius, index) => {
-      const points = Array.from({ length: 181 }, (_, pointIndex) => {
-        const angle = (pointIndex / 180) * Math.PI * 2;
-        return {
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius
-        };
-      });
-      const alpha = Math.max(0.06, 0.22 - index * 0.022);
-      this.drawProjectedLine(points, state, `rgba(255, 238, 179, ${alpha})`);
+  private addCentralMass(state: SimulationState): void {
+    const radius = Math.max(8, centralBodyRadius(state.params));
+    const surfaceY = this.surfaceHeight({ x: 0, y: 0 }, state);
+    const geometry = new THREE.SphereGeometry(radius, 48, 32);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xf2a15d,
+      emissive: 0x7a261c,
+      emissiveIntensity: 0.22,
+      roughness: 0.45
     });
+    const sphere = new THREE.Mesh(geometry, material);
+    sphere.position.set(0, surfaceY + radius, 0);
+    this.dynamicGroup.add(sphere);
 
-    this.ctx.restore();
-  }
-
-  private drawProjectedLine(points: Vector2[], state: SimulationState, color: string): void {
-    this.ctx.beginPath();
-    points.forEach((point, index) => {
-      const screen = this.worldToScreen(point, state);
-      if (index === 0) this.ctx.moveTo(screen.x, screen.y);
-      else this.ctx.lineTo(screen.x, screen.y);
+    const glowGeometry = new THREE.SphereGeometry(radius * 1.65, 36, 24);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffa85c,
+      transparent: true,
+      opacity: 0.12,
+      depthWrite: false
     });
-    this.ctx.strokeStyle = color;
-    this.ctx.stroke();
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    glow.position.copy(sphere.position);
+    this.dynamicGroup.add(glow);
+
+    const label = this.createTextSprite(`Zentralmasse ${Math.round(state.params.centralMass)}`, "#ffffff");
+    label.position.set(0, surfaceY + radius * 2.15, 0);
+    label.scale.set(92, 24, 1);
+    this.dynamicGroup.add(label);
   }
 
-  private drawTrails(state: SimulationState): void {
+  private addTrails(state: SimulationState): void {
     for (const object of state.objects) {
       if (object.trail.length < 2) continue;
 
-      const baseColor = object.type === "light" ? "255, 219, 105" : "105, 218, 255";
-      for (let i = 1; i < object.trail.length; i++) {
-        const previous = this.worldToScreen(object.trail[i - 1], state);
-        const current = this.worldToScreen(object.trail[i], state);
-        const age = i / object.trail.length;
-
-        this.ctx.beginPath();
-        this.ctx.moveTo(previous.x, previous.y);
-        this.ctx.lineTo(current.x, current.y);
-        this.ctx.strokeStyle = `rgba(${baseColor}, ${0.08 + age * 0.58})`;
-        this.ctx.lineWidth = object.type === "light" ? 2.1 : 1.8;
-        this.ctx.stroke();
-      }
+      const color = object.type === "light" ? 0xffdf66 : 0x6bdfff;
+      const material = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: object.type === "light" ? 0.78 : 0.68
+      });
+      const points = object.trail.map((point) => this.worldToThree(point, state, 5));
+      this.dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
     }
   }
 
-  private drawCentralMass(state: SimulationState): void {
-    const mass = state.params.centralMass;
-    const center = this.worldToScreen({ x: 0, y: 0 }, state);
-    const radius = Math.max(8, centralBodyRadius(state.params) * this.scale);
-
-    const glow = this.ctx.createRadialGradient(center.x, center.y, radius * 0.35, center.x, center.y, radius * 2.25);
-    glow.addColorStop(0, "rgba(255, 200, 110, 0.42)");
-    glow.addColorStop(0.48, "rgba(237, 105, 75, 0.15)");
-    glow.addColorStop(1, "rgba(237, 105, 75, 0)");
-    this.ctx.fillStyle = glow;
-    this.ctx.beginPath();
-    this.ctx.arc(center.x, center.y, radius * 2.25, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    const body = this.ctx.createRadialGradient(
-      center.x - radius * 0.4,
-      center.y - radius * 0.45,
-      radius * 0.1,
-      center.x,
-      center.y,
-      radius
-    );
-    body.addColorStop(0, "#fff1b9");
-    body.addColorStop(0.45, "#f2a85d");
-    body.addColorStop(1, "#b44842");
-
-    this.ctx.fillStyle = body;
-    this.ctx.strokeStyle = "rgba(255, 242, 205, 0.78)";
-    this.ctx.lineWidth = 2;
-    this.ctx.beginPath();
-    this.ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.stroke();
-
-    this.ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
-    this.ctx.font = "600 13px system-ui, sans-serif";
-    this.ctx.textAlign = "center";
-    this.ctx.fillText(`Zentralmasse ${Math.round(mass)}`, center.x, center.y + radius + 22);
-  }
-
-  private drawObjects(state: SimulationState): void {
+  private addObjects(state: SimulationState): void {
     for (const object of state.objects) {
-      const screen = this.worldToScreen(object.position, state);
-      const color = object.type === "light" ? "#ffe27a" : object.active ? "#7adfff" : "#9aa3a8";
-      const radius = object.type === "light" ? 4.5 : 6;
-
-      this.ctx.fillStyle = color;
-      this.ctx.strokeStyle = "rgba(8, 12, 14, 0.75)";
-      this.ctx.lineWidth = 1.5;
-      this.ctx.beginPath();
-      this.ctx.arc(screen.x, screen.y, radius, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.stroke();
+      const position = this.worldToThree(object.position, state, 8);
+      const radius = object.type === "light" ? 5 : 7;
+      const color = object.type === "light" ? 0xffdf66 : object.active ? 0x6bdfff : 0x9aa3a8;
+      const geometry = new THREE.SphereGeometry(radius, 20, 12);
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: object.active ? 0.16 : 0.02,
+        roughness: 0.5
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.copy(position);
+      this.dynamicGroup.add(mesh);
 
       if (state.showVectors && object.active) {
-        this.drawObjectVector(object, state);
+        this.addVelocityArrow(object, state);
       }
     }
   }
 
-  private drawObjectVector(object: SimObject, state: SimulationState): void {
-    const start = this.worldToScreen(object.position, state);
-    const velocityDirection = normalize(object.velocity);
-    const velocityEnd = this.worldToScreen(
-      {
-        x: object.position.x + velocityDirection.x * 42,
-        y: object.position.y + velocityDirection.y * 42
-      },
-      state
-    );
-    this.drawArrow(start, velocityEnd, object.type === "light" ? "#ffe27a" : "#7adfff", 2);
-
+  private addVelocityArrow(object: SimObject, state: SimulationState): void {
+    const direction2 = normalize(object.velocity);
+    const start = this.worldToThree(object.position, state, 14);
+    const endWorld = {
+      x: object.position.x + direction2.x * 48,
+      y: object.position.y + direction2.y * 48
+    };
+    const end = this.worldToThree(endWorld, state, 14);
+    const direction3 = end.clone().sub(start).normalize();
+    const color = object.type === "light" ? 0xffdf66 : 0x6bdfff;
+    this.dynamicGroup.add(new THREE.ArrowHelper(direction3, start, start.distanceTo(end), color, 14, 8));
   }
 
-  private drawDragPreview(state: SimulationState): void {
+  private addDragPreview(state: SimulationState): void {
     if (!state.drag?.active) return;
 
-    const start = this.worldToScreen(state.drag.start, state);
-    const end = this.worldToScreen(state.drag.current, state);
-    this.drawArrow(start, end, state.selectedType === "light" ? "#ffe27a" : "#7adfff", 3);
+    const start = this.worldToThree(state.drag.start, state, 16);
+    const end = this.worldToThree(state.drag.current, state, 16);
+    const direction = end.clone().sub(start);
+    if (direction.length() < 1) return;
 
-    this.ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-    this.ctx.font = "600 12px system-ui, sans-serif";
-    this.ctx.fillText(state.selectedType === "light" ? "Richtung" : "Anfangsgeschwindigkeit", end.x + 14, end.y - 10);
+    const color = state.selectedType === "light" ? 0xffdf66 : 0x6bdfff;
+    this.dynamicGroup.add(new THREE.ArrowHelper(direction.clone().normalize(), start, direction.length(), color, 18, 10));
   }
 
-  private drawArrow(start: ScreenPoint, end: ScreenPoint, color: string, width: number): void {
-    const angle = Math.atan2(end.y - start.y, end.x - start.x);
-    const headLength = 11;
-
-    this.ctx.strokeStyle = color;
-    this.ctx.fillStyle = color;
-    this.ctx.lineWidth = width;
-    this.ctx.lineCap = "round";
-    this.ctx.beginPath();
-    this.ctx.moveTo(start.x, start.y);
-    this.ctx.lineTo(end.x, end.y);
-    this.ctx.stroke();
-
-    this.ctx.beginPath();
-    this.ctx.moveTo(end.x, end.y);
-    this.ctx.lineTo(end.x - headLength * Math.cos(angle - Math.PI / 6), end.y - headLength * Math.sin(angle - Math.PI / 6));
-    this.ctx.lineTo(end.x - headLength * Math.cos(angle + Math.PI / 6), end.y - headLength * Math.sin(angle + Math.PI / 6));
-    this.ctx.closePath();
-    this.ctx.fill();
+  private worldToThree(position: Vector2, state: SimulationState, lift = 0): THREE.Vector3 {
+    return new THREE.Vector3(position.x, this.surfaceHeight(position, state) + lift, position.y);
   }
 
-  private drawLegend(state: SimulationState): void {
-    const activeCount = state.objects.filter((object) => object.active).length;
-    this.ctx.fillStyle = "rgba(255, 255, 255, 0.84)";
-    this.ctx.font = "600 13px system-ui, sans-serif";
-    this.ctx.textAlign = "left";
-    this.ctx.fillText(state.running ? "Simulation läuft" : "Simulation pausiert", 18, 28);
-    this.ctx.font = "12px system-ui, sans-serif";
-    this.ctx.fillText(`${activeCount} aktive Objekte · Ziehen im Canvas erzeugt ein Objekt`, 18, 49);
+  private createTextSprite(text: string, color: string): THREE.Sprite {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 128;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return new THREE.Sprite();
+    }
+
+    context.fillStyle = "rgba(14, 18, 20, 0.48)";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = color;
+    context.font = "700 42px system-ui, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false
+    });
+    return new THREE.Sprite(material);
   }
 }

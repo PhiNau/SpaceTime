@@ -55,7 +55,3 @@ src/
   styles.css     Layout und Gestaltung
   types.ts       Gemeinsame Typen
 ```
-
-## Rücksprung zur 2,5D-Version
-
-Vor dem Three.js-Versuch wurde der vorherige Stand nach `backups/2d-canvas-current/` kopiert. Zum schnellen Vergleichen oder Zurücksetzen können die Dateien aus diesem Ordner wieder an die Projektwurzel kopiert werden.
