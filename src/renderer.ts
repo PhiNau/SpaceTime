@@ -1,4 +1,4 @@
-import { normalize } from "./physics";
+import { centralBodyRadius, normalize } from "./physics";
 import type { SimObject, SimulationState, Vector2 } from "./types";
 
 type ScreenPoint = {
@@ -38,11 +38,26 @@ export class Renderer {
     };
   }
 
-  screenToWorld(point: ScreenPoint): Vector2 {
-    return {
-      x: (point.x - this.origin.x) / this.scale,
-      y: (point.y - this.origin.y) / (this.scale * 0.58)
-    };
+  screenToWorld(point: ScreenPoint, state: SimulationState): Vector2 {
+    const x = (point.x - this.origin.x) / this.scale;
+    let y = (point.y - this.origin.y) / (this.scale * 0.58);
+
+    // Invert the same curved-surface projection used for drawing, so pointer
+    // starts stay under the cursor even when the visual warp is high.
+    for (let i = 0; i < 8; i++) {
+      const projectedY = this.projectSurfacePoint(x, y, this.surfaceHeight({ x, y }, state)).y;
+      const error = projectedY - point.y;
+      if (Math.abs(error) < 0.2) break;
+
+      const sampleStep = 1;
+      const projectedYPlus = this.projectSurfacePoint(x, y + sampleStep, this.surfaceHeight({ x, y: y + sampleStep }, state)).y;
+      const derivative = projectedYPlus - projectedY;
+
+      if (Math.abs(derivative) < 0.01) break;
+      y -= error / derivative;
+    }
+
+    return { x, y };
   }
 
   worldToScreen(position: Vector2, state: SimulationState): ScreenPoint {
@@ -244,7 +259,7 @@ export class Renderer {
   private drawCentralMass(state: SimulationState): void {
     const mass = state.params.centralMass;
     const center = this.worldToScreen({ x: 0, y: 0 }, state);
-    const radius = (12 + Math.sqrt(Math.max(mass, 1)) * 1.45) * this.scale;
+    const radius = Math.max(8, centralBodyRadius(state.params) * this.scale);
 
     const glow = this.ctx.createRadialGradient(center.x, center.y, radius * 0.35, center.x, center.y, radius * 2.25);
     glow.addColorStop(0, "rgba(255, 200, 110, 0.42)");

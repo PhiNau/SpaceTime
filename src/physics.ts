@@ -29,6 +29,11 @@ export function accelerationForMass(position: Vector2, params: SimulationParams)
   return clampMagnitude(scale(rVec, strength / denominator), params.maxAcceleration);
 }
 
+export function centralBodyRadius(params: SimulationParams): number {
+  if (params.centralMass <= 0) return 0;
+  return params.collisionRadius + Math.sqrt(params.centralMass) * 1.45;
+}
+
 function refractiveIndexGradient(position: Vector2, params: SimulationParams): Vector2 {
   if (params.centralMass <= 0 || params.lightBendingFactor <= 0) return { x: 0, y: 0 };
 
@@ -63,7 +68,7 @@ export function updateObject(object: SimObject, dt: number, params: SimulationPa
     object.trail.splice(0, object.trail.length - params.trailLength);
   }
 
-  const centralRadius = params.collisionRadius + Math.sqrt(params.centralMass) * 1.8;
+  const centralRadius = centralBodyRadius(params);
   if (length(object.position) < centralRadius && params.centralMass > 0) {
     object.active = false;
     object.collided = true;

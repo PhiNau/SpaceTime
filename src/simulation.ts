@@ -18,7 +18,7 @@ export class Simulation {
         lightSpeed: 235,
         lightBendingFactor: 28,
         trailLength: 1200,
-        collisionRadius: 18,
+        collisionRadius: 12,
         maxAcceleration: 420
       },
       objects: [],

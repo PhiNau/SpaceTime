@@ -108,10 +108,13 @@ export class Controls {
 
   private pointerToWorld(event: PointerEvent): Vector2 {
     const rect = this.canvas.getBoundingClientRect();
-    return this.renderer.screenToWorld({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top
-    });
+    return this.renderer.screenToWorld(
+      {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      },
+      this.simulation.state
+    );
   }
 
   private selectType(type: BodyType): void {
