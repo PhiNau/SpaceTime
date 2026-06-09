@@ -74,7 +74,7 @@ export class Renderer {
 
   rotateCamera(deltaX: number, deltaY: number): void {
     this.cameraAzimuth -= deltaX * 0.008;
-    this.cameraElevation = THREE.MathUtils.clamp(this.cameraElevation + deltaY * 0.005, 0.18, 1.22);
+    this.cameraElevation = THREE.MathUtils.clamp(this.cameraElevation + deltaY * 0.005, -1.05, 1.3);
     this.updateCameraPosition();
   }
 
