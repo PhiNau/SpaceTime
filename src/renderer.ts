@@ -129,6 +129,19 @@ export class Renderer {
     this.renderer.render(this.scene, this.camera);
   }
 
+  isObjectVisible(object: SimObject, state: SimulationState): boolean {
+    const margin = 0.18;
+    const position = this.worldToThree(object.position, state, 8).project(this.camera);
+    return (
+      position.z > -1 &&
+      position.z < 1 &&
+      position.x >= -1 - margin &&
+      position.x <= 1 + margin &&
+      position.y >= -1 - margin &&
+      position.y <= 1 + margin
+    );
+  }
+
   private setupScene(): void {
     this.scene.fog = new THREE.Fog(0x101317, 760, 1800);
 

@@ -14,6 +14,7 @@ export type SimObject = {
   trail: Vector2[];
   active: boolean;
   collided: boolean;
+  age: number;
 };
 
 export type SimulationParams = {

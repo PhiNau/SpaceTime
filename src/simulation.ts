@@ -37,12 +37,17 @@ export class Simulation {
     this.state.selectedType = type;
   }
 
-  update(dtSeconds: number): void {
+  update(dtSeconds: number, shouldRemoveObject?: (object: SimObject) => boolean): void {
     if (!this.state.running) return;
 
     const dt = Math.min(dtSeconds * this.state.params.simulationSpeed, 0.03);
     for (const object of this.state.objects) {
+      object.age += dt;
       updateObject(object, dt, this.state.params);
+    }
+
+    if (shouldRemoveObject) {
+      this.state.objects = this.state.objects.filter((object) => object.active && (object.age < 0.35 || !shouldRemoveObject(object)));
     }
   }
 
@@ -62,7 +67,8 @@ export class Simulation {
       direction: normalize(velocity, direction),
       trail: [{ ...start }],
       active: true,
-      collided: false
+      collided: false,
+      age: 0
     };
 
     this.state.objects.push(object);

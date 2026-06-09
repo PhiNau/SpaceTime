@@ -20,7 +20,7 @@ function animationLoop(timestamp: number): void {
   const dt = (timestamp - previousTimestamp) / 1000;
   previousTimestamp = timestamp;
 
-  simulation.update(dt);
+  simulation.update(dt, (object) => !renderer.isObjectVisible(object, simulation.state));
   renderer.render(simulation.state);
 
   requestAnimationFrame(animationLoop);
