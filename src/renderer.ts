@@ -292,10 +292,6 @@ export class Renderer {
     glow.position.copy(sphere.position);
     this.dynamicGroup.add(glow);
 
-    const label = this.createTextSprite(`Zentralmasse ${Math.round(state.params.centralMass)}`, "#ffffff");
-    label.position.set(0, surfaceY + radius * 2.15, 0);
-    label.scale.set(92, 24, 1);
-    this.dynamicGroup.add(label);
   }
 
   private addTrails(state: SimulationState): void {
@@ -364,29 +360,4 @@ export class Renderer {
     return new THREE.Vector3(position.x, this.surfaceHeight(position, state) + lift, position.y);
   }
 
-  private createTextSprite(text: string, color: string): THREE.Sprite {
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 128;
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return new THREE.Sprite();
-    }
-
-    context.fillStyle = "rgba(14, 18, 20, 0.48)";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = color;
-    context.font = "700 42px system-ui, sans-serif";
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText(text, canvas.width / 2, canvas.height / 2);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthTest: false
-    });
-    return new THREE.Sprite(material);
-  }
 }
