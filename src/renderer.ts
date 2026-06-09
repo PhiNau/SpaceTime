@@ -175,7 +175,7 @@ export class Renderer {
 
   private clearGroup(group: THREE.Group): void {
     for (const child of [...group.children]) {
-      child.traverse((object) => {
+      child.traverse((object: THREE.Object3D) => {
         const disposable = object as {
           geometry?: THREE.BufferGeometry;
           material?: THREE.Material | THREE.Material[];
