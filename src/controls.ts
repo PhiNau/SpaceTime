@@ -26,6 +26,9 @@ export class Controls {
   private readonly pauseButton = requireElement("pauseButton", HTMLButtonElement);
   private readonly resetButton = requireElement("resetButton", HTMLButtonElement);
   private readonly clearTrailsButton = requireElement("clearTrailsButton", HTMLButtonElement);
+  private readonly resetCameraButton = requireElement("resetCameraButton", HTMLButtonElement);
+  private cameraDragPointerId: number | null = null;
+  private lastCameraPointer: Vector2 | null = null;
 
   constructor(
     private readonly simulation: Simulation,
@@ -73,10 +76,21 @@ export class Controls {
     this.pauseButton.addEventListener("click", () => this.simulation.setRunning(false));
     this.resetButton.addEventListener("click", () => this.simulation.reset());
     this.clearTrailsButton.addEventListener("click", () => this.simulation.clearTrails());
+    this.resetCameraButton.addEventListener("click", () => this.renderer.resetCamera());
   }
 
   private bindCanvas(): void {
+    this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
     this.canvas.addEventListener("pointerdown", (event) => {
+      if (this.isCameraControl(event)) {
+        this.simulation.state.drag = null;
+        this.cameraDragPointerId = event.pointerId;
+        this.lastCameraPointer = { x: event.clientX, y: event.clientY };
+        this.canvas.setPointerCapture(event.pointerId);
+        return;
+      }
+
       const start = this.pointerToWorld(event);
       this.canvas.setPointerCapture(event.pointerId);
       this.simulation.state.drag = {
@@ -87,11 +101,26 @@ export class Controls {
     });
 
     this.canvas.addEventListener("pointermove", (event) => {
+      if (this.cameraDragPointerId === event.pointerId && this.lastCameraPointer) {
+        const deltaX = event.clientX - this.lastCameraPointer.x;
+        const deltaY = event.clientY - this.lastCameraPointer.y;
+        this.renderer.rotateCamera(deltaX, deltaY);
+        this.lastCameraPointer = { x: event.clientX, y: event.clientY };
+        return;
+      }
+
       if (!this.simulation.state.drag?.active) return;
       this.simulation.state.drag.current = this.pointerToWorld(event);
     });
 
     this.canvas.addEventListener("pointerup", (event) => {
+      if (this.cameraDragPointerId === event.pointerId) {
+        this.cameraDragPointerId = null;
+        this.lastCameraPointer = null;
+        this.canvas.releasePointerCapture(event.pointerId);
+        return;
+      }
+
       const drag = this.simulation.state.drag;
       if (!drag?.active) return;
 
@@ -103,7 +132,22 @@ export class Controls {
 
     this.canvas.addEventListener("pointercancel", () => {
       this.simulation.state.drag = null;
+      this.cameraDragPointerId = null;
+      this.lastCameraPointer = null;
     });
+
+    this.canvas.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        this.renderer.zoomCamera(event.deltaY);
+      },
+      { passive: false }
+    );
+  }
+
+  private isCameraControl(event: PointerEvent): boolean {
+    return event.button === 2 || event.shiftKey;
   }
 
   private pointerToWorld(event: PointerEvent): Vector2 {

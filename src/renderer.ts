@@ -36,6 +36,10 @@ export class Renderer {
   private lastSurfaceKey = "";
   private readonly surfaceSize = 960;
   private readonly surfaceSegments = 78;
+  private readonly cameraTarget = new THREE.Vector3(0, -40, 0);
+  private cameraAzimuth = 0;
+  private cameraElevation = 0.54;
+  private cameraDistance = 750;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({
@@ -65,6 +69,25 @@ export class Renderer {
     this.renderer.setSize(this.width, this.height, false);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
+    this.updateCameraPosition();
+  }
+
+  rotateCamera(deltaX: number, deltaY: number): void {
+    this.cameraAzimuth -= deltaX * 0.008;
+    this.cameraElevation = THREE.MathUtils.clamp(this.cameraElevation + deltaY * 0.005, 0.18, 1.22);
+    this.updateCameraPosition();
+  }
+
+  zoomCamera(deltaY: number): void {
+    this.cameraDistance = THREE.MathUtils.clamp(this.cameraDistance + deltaY * 0.55, 430, 1250);
+    this.updateCameraPosition();
+  }
+
+  resetCamera(): void {
+    this.cameraAzimuth = 0;
+    this.cameraElevation = 0.54;
+    this.cameraDistance = 750;
+    this.updateCameraPosition();
   }
 
   screenToWorld(point: ScreenPoint, state: SimulationState): Vector2 {
@@ -117,8 +140,17 @@ export class Renderer {
 
     this.scene.add(ambient, key, fill);
 
-    this.camera.position.set(0, 360, 650);
-    this.camera.lookAt(0, -40, 0);
+    this.updateCameraPosition();
+  }
+
+  private updateCameraPosition(): void {
+    const horizontalDistance = Math.cos(this.cameraElevation) * this.cameraDistance;
+    this.camera.position.set(
+      Math.sin(this.cameraAzimuth) * horizontalDistance,
+      Math.sin(this.cameraElevation) * this.cameraDistance,
+      Math.cos(this.cameraAzimuth) * horizontalDistance
+    );
+    this.camera.lookAt(this.cameraTarget);
   }
 
   private updateSurface(state: SimulationState): void {
