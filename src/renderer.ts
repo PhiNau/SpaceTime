@@ -68,7 +68,10 @@ export class Renderer {
 
   render(state: SimulationState): void {
     this.clear();
+    this.drawFunnelShading(state);
     this.drawGrid(state);
+    this.drawDepthGuides(state);
+    this.drawContourRings(state);
     this.drawTrails(state);
     this.drawCentralMass(state);
     this.drawObjects(state);
@@ -109,6 +112,100 @@ export class Renderer {
       }));
       this.drawProjectedLine(points, state, "rgba(245, 185, 92, 0.23)");
     }
+
+    this.ctx.restore();
+  }
+
+  private drawFunnelShading(state: SimulationState): void {
+    const mass = state.params.centralMass;
+    if (mass <= 0) return;
+
+    const center = this.worldToScreen({ x: 0, y: 0 }, state);
+    const radiusX = (210 + mass * 2.1) * this.scale;
+    const radiusY = radiusX * 0.58;
+
+    this.ctx.save();
+    this.ctx.translate(center.x, center.y);
+    this.ctx.scale(1, 0.58);
+
+    const shadow = this.ctx.createRadialGradient(0, 0, radiusX * 0.05, 0, 0, radiusX);
+    shadow.addColorStop(0, "rgba(20, 7, 8, 0.72)");
+    shadow.addColorStop(0.35, "rgba(137, 61, 48, 0.24)");
+    shadow.addColorStop(0.72, "rgba(242, 178, 89, 0.08)");
+    shadow.addColorStop(1, "rgba(242, 178, 89, 0)");
+
+    this.ctx.fillStyle = shadow;
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, radiusX, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    const rim = this.ctx.createRadialGradient(0, 0, radiusX * 0.45, 0, 0, radiusX * 0.9);
+    rim.addColorStop(0, "rgba(255, 255, 255, 0)");
+    rim.addColorStop(0.55, "rgba(255, 217, 142, 0.04)");
+    rim.addColorStop(0.78, "rgba(255, 217, 142, 0.16)");
+    rim.addColorStop(1, "rgba(255, 217, 142, 0)");
+
+    this.ctx.fillStyle = rim;
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, radiusX * 0.95, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.restore();
+
+    const lowerShadow = this.ctx.createRadialGradient(
+      center.x,
+      center.y + radiusY * 0.45,
+      radiusY * 0.1,
+      center.x,
+      center.y + radiusY * 0.45,
+      radiusX * 0.72
+    );
+    lowerShadow.addColorStop(0, "rgba(0, 0, 0, 0.28)");
+    lowerShadow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    this.ctx.fillStyle = lowerShadow;
+    this.ctx.beginPath();
+    this.ctx.ellipse(center.x, center.y + radiusY * 0.42, radiusX * 0.75, radiusY * 0.45, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  private drawDepthGuides(state: SimulationState): void {
+    if (state.params.centralMass <= 0) return;
+
+    this.ctx.save();
+    this.ctx.lineWidth = 1;
+
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 10) {
+      const points = Array.from({ length: 22 }, (_, index) => {
+        const radius = 42 + index * 15;
+        return {
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius
+        };
+      });
+      this.drawProjectedLine(points, state, "rgba(255, 226, 153, 0.12)");
+    }
+
+    this.ctx.restore();
+  }
+
+  private drawContourRings(state: SimulationState): void {
+    if (state.params.centralMass <= 0) return;
+
+    this.ctx.save();
+    this.ctx.lineWidth = 1.4;
+
+    const rings = [54, 82, 118, 164, 222, 292, 374];
+    rings.forEach((radius, index) => {
+      const points = Array.from({ length: 181 }, (_, pointIndex) => {
+        const angle = (pointIndex / 180) * Math.PI * 2;
+        return {
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius
+        };
+      });
+      const alpha = Math.max(0.06, 0.22 - index * 0.022);
+      this.drawProjectedLine(points, state, `rgba(255, 238, 179, ${alpha})`);
+    });
 
     this.ctx.restore();
   }
